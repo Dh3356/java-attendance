@@ -1,15 +1,19 @@
 package attendance.controller;
 
-import attendance.dto.AttendanceLogResponse;
-import attendance.dto.RequiresManagementCrewResponse;
-import attendance.dto.UpdateAttendanceResponse;
-import attendance.model.domain.crew.Crew;
-import attendance.model.domain.crew.CrewAttendanceComparator;
-import attendance.model.service.AttendanceService;
+import attendance.controller.dto.CrewAttendanceResponse;
+import attendance.controller.dto.WarningCrewResponse;
+import attendance.model.attendance.log.AttendanceLog;
+import attendance.model.attendance.log.AttendanceLogs;
+import attendance.model.attendance.repository.CrewAttendanceRepository;
+import attendance.model.attendance.status.AttendanceStatus;
+import attendance.model.campus.CampusOperationPolicy;
+import attendance.model.crew.Crew;
 import attendance.view.input.InputView;
 import attendance.view.output.OutputView;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public class DefaultController implements Controller {
 
@@ -54,6 +58,14 @@ public class DefaultController implements Controller {
     @Override
     public void attendance() {
         try {
+            final Crew crew = new Crew(inputView.inputCrewNickName());
+            final LocalDateTime attendanceDateTime = LocalDateTime.of(TODAY, inputView.inputAttendanceTime());
+            final AttendanceLog attendanceLog = AttendanceLog.fromDateTime(attendanceDateTime, campusOperationPolicy);
+
+            crewAttendanceRepository.add(crew, attendanceLog);
+
+        } catch (IllegalArgumentException e) {
+            handleException(e);
             final String crewName = inputView.inputNickname();
             final Crew crew = attendanceService.findCrewByName(crewName);
 
@@ -70,6 +82,15 @@ public class DefaultController implements Controller {
     @Override
     public void updateAttendance() {
         try {
+            final Crew crew = new Crew(inputView.inputUpdateCrewNickName());
+            final LocalDateTime attendanceDateTime = LocalDateTime.of(TODAY, inputView.inputUpdateAttendanceTime());
+            final AttendanceLog from = crewAttendanceRepository.findAttendanceLogByDate(crew, TODAY);
+            final AttendanceLog to = AttendanceLog.fromDateTime(attendanceDateTime, campusOperationPolicy);
+
+            crewAttendanceRepository.update(crew, from, to);
+
+        } catch (IllegalArgumentException e) {
+            handleException(e);
             final String crewName = inputView.inputUpdateCrewName();
             final Crew crew = attendanceService.findCrewByName(crewName);
 
@@ -90,6 +111,26 @@ public class DefaultController implements Controller {
     @Override
     public void checkCrewAttendance() {
         try {
+            final Crew crew = new Crew(inputView.inputCrewNickName());
+
+            final AttendanceLogs attendanceLogs = crewAttendanceRepository.findByCrewBetween(
+                    crew,
+                    START_DATE,
+                    TODAY,
+                    campusOperationPolicy
+            );
+
+            final CrewAttendanceResponse crewAttendanceResponse = CrewAttendanceResponse.from(
+                    crew,
+                    attendanceLogs,
+                    AttendanceStatus.getStatistics(attendanceLogs.getAllAttendanceStatuses())
+            );
+
+            outputView.printCrewAttendance(crewAttendanceResponse);
+
+        } catch (IllegalArgumentException e) {
+            handleException(e);
+            
             final String crewName = inputView.inputNickname();
             final Crew crew = attendanceService.findCrewByName(crewName);
 
@@ -101,6 +142,17 @@ public class DefaultController implements Controller {
 
     @Override
     public void printRequiresManagementCrews() {
+        final Map<Crew, AttendanceLogs> warningCrewAttendanceLogs = crewAttendanceRepository.getWarningCrewAttendanceLogs(
+                START_DATE,
+                TODAY,
+                campusOperationPolicy
+        );
+
+        final List<WarningCrewResponse> warningCrewResponses = warningCrewAttendanceLogs.entrySet().stream()
+                .map(entry -> WarningCrewResponse.from(entry.getKey(), entry.getValue()))
+                .toList();
+
+        outputView.printWarningCrewResponses(warningCrewResponses);
         try {
             final List<RequiresManagementCrewResponse> responses =
                     attendanceService.getRequiresManagementCrews(crewAttendanceComparator);
