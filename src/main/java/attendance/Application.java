@@ -1,25 +1,31 @@
 package attendance;
 
+import attendance.controller.Controller;
 import attendance.controller.DefaultController;
-import attendance.model.attendance.log.CrewAttendanceLogDeserializer;
-import attendance.model.attendance.repository.CrewAttendanceRepository;
-import attendance.model.campus.CampusOperationPolicy;
+import attendance.model.domain.crew.DefaultCrewAttendanceComparator;
+import attendance.model.repository.AttendanceRepository;
+import attendance.model.repository.CrewAttendanceDeserializer;
+import attendance.model.service.AttendanceService;
+import attendance.view.input.ConsoleInputView;
+import attendance.view.output.ConsoleOutputView;
 import java.nio.file.Path;
 
 public class Application {
 
     public static void main(String[] args) {
 
-        final CampusOperationPolicy campusOperationPolicy = new CampusOperationPolicy();
-        final Path path = Path.of("src/main/resources/attendances.csv");
-        final CrewAttendanceLogDeserializer crewAttendanceLogDeserializer = new CrewAttendanceLogDeserializer();
-        final CrewAttendanceRepository crewAttendanceRepository = new CrewAttendanceRepository(
-                crewAttendanceLogDeserializer,
-                path,
-                campusOperationPolicy
+        final AttendanceRepository attendanceRepository = new AttendanceRepository(
+                new CrewAttendanceDeserializer(),
+                Path.of("src/main/resources/attendances.csv")
         );
 
-        final DefaultController defaultController = new DefaultController(crewAttendanceRepository);
-        defaultController.run();
+        final Controller controller = new DefaultController(
+                new ConsoleInputView(),
+                new ConsoleOutputView(),
+                new AttendanceService(attendanceRepository),
+                new DefaultCrewAttendanceComparator()
+        );
+
+        controller.run();
     }
 }

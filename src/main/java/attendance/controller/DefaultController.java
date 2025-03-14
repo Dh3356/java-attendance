@@ -19,15 +19,22 @@ public class DefaultController implements Controller {
 
     private static final String ERROR_FORMAT = "[ERROR] %s";
 
-    private static final LocalDate START_DATE = LocalDate.of(2024, 12, 1);
-    private static final LocalDate TODAY = LocalDate.of(2024, 12, 13);
-    private final CampusOperationPolicy campusOperationPolicy = new CampusOperationPolicy();
-    private final CrewAttendanceRepository crewAttendanceRepository;
-    private final InputView inputView = new InputView();
-    private final OutputView outputView = new OutputView();
+    private final InputView inputView;
+    private final OutputView outputView;
+    private final AttendanceService attendanceService;
+    private final CrewAttendanceComparator crewAttendanceComparator;
 
-    public DefaultController(CrewAttendanceRepository crewAttendanceRepository) {
-        this.crewAttendanceRepository = crewAttendanceRepository;
+    public DefaultController(
+            final InputView inputView,
+            final OutputView outputView,
+            final AttendanceService attendanceService,
+            final CrewAttendanceComparator crewAttendanceComparator
+    ) {
+
+        this.inputView = inputView;
+        this.outputView = outputView;
+        this.attendanceService = attendanceService;
+        this.crewAttendanceComparator = crewAttendanceComparator;
     }
 
     @Override
@@ -41,7 +48,7 @@ public class DefaultController implements Controller {
 
     private Command inputCommand() {
         try {
-            return inputView.inputCommand(TODAY);
+            return inputView.inputCommand();
         } catch (final IllegalArgumentException e) {
             handleException(e);
             return inputCommand();
@@ -59,6 +66,16 @@ public class DefaultController implements Controller {
 
         } catch (IllegalArgumentException e) {
             handleException(e);
+            final String crewName = inputView.inputNickname();
+            final Crew crew = attendanceService.findCrewByName(crewName);
+
+            final LocalDateTime attendanceTime = inputView.inputAttendanceTime();
+
+            final AttendanceLogResponse response = attendanceService.attendance(crew, attendanceTime);
+
+            outputView.printAttendanceLogResponse(response);
+        } catch (final RuntimeException runtimeException) {
+            handleException(runtimeException);
         }
     }
 
@@ -74,6 +91,20 @@ public class DefaultController implements Controller {
 
         } catch (IllegalArgumentException e) {
             handleException(e);
+            final String crewName = inputView.inputUpdateCrewName();
+            final Crew crew = attendanceService.findCrewByName(crewName);
+
+            final LocalDateTime updatedTime = LocalDateTime.of(
+                    inputView.inputUpdateAttendanceDate(),
+                    inputView.inputUpdateAttendanceTime()
+            );
+
+            final UpdateAttendanceResponse updateAttendanceResponse = attendanceService.updateAttendance(crew,
+                    updatedTime);
+
+            outputView.printUpdateAttendanceResponse(updateAttendanceResponse);
+        } catch (final RuntimeException runtimeException) {
+            handleException(runtimeException);
         }
     }
 
@@ -99,6 +130,13 @@ public class DefaultController implements Controller {
 
         } catch (IllegalArgumentException e) {
             handleException(e);
+            
+            final String crewName = inputView.inputNickname();
+            final Crew crew = attendanceService.findCrewByName(crewName);
+
+            outputView.printCrewAttendanceLogResponse(attendanceService.getAttendanceLog(crew));
+        } catch (final RuntimeException runtimeException) {
+            handleException(runtimeException);
         }
     }
 
@@ -115,6 +153,14 @@ public class DefaultController implements Controller {
                 .toList();
 
         outputView.printWarningCrewResponses(warningCrewResponses);
+        try {
+            final List<RequiresManagementCrewResponse> responses =
+                    attendanceService.getRequiresManagementCrews(crewAttendanceComparator);
+
+            outputView.printRequiresManagementCrewResponse(responses);
+        } catch (final RuntimeException runtimeException) {
+            handleException(runtimeException);
+        }
     }
 
     @Override
